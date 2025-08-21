@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useContext, useRef, useEffect, useCallback, createContext } from 'react';
 import ReactDOM from 'react-dom/client';
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
@@ -148,7 +147,7 @@ const CopyIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 
 // --- GEMINI SERVICE ---
-const API_KEY = "AIzaSyAkg7ghuASps8iAtxOCUHwUlCvsFOD9jdU";
+const API_KEY = "AIzaSyAmn1Y4qBKdie20lZqpn8OLvYF_JQ5E_nA";
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 const fileToGenerativePart = async (file: File) => {
@@ -519,12 +518,22 @@ const VideoGeneratorTool: React.FC<ToolProps> = ({ tool }) => {
     const [prompt, setPrompt] = useState('');
     const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [isFetchingVideo, setIsFetchingVideo] = useState<boolean>(false);
     const [error, setError] = useState<string>('');
     const [loadingMessage, setLoadingMessage] = useState(t[0]);
 
     const operationRef = useRef<any>(null);
     const pollingIntervalRef = useRef<number | null>(null);
     const messageIntervalRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        // Cleanup function to revoke the blob URL to prevent memory leaks
+        return () => {
+            if (generatedVideoUrl && generatedVideoUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(generatedVideoUrl);
+            }
+        };
+    }, [generatedVideoUrl]);
 
     const stopPolling = () => {
         if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
@@ -544,8 +553,21 @@ const VideoGeneratorTool: React.FC<ToolProps> = ({ tool }) => {
                 setIsLoading(false);
                 const downloadLink = updatedOperation.response?.generatedVideos?.[0]?.video?.uri;
                 if (downloadLink) {
-                    const finalUrl = `${downloadLink}&key=${API_KEY}`;
-                    setGeneratedVideoUrl(finalUrl);
+                    setIsFetchingVideo(true);
+                    try {
+                        const finalUrl = `${downloadLink}&key=${API_KEY}`;
+                        const response = await fetch(finalUrl);
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch video: ${response.statusText}`);
+                        }
+                        const videoBlob = await response.blob();
+                        const objectUrl = URL.createObjectURL(videoBlob);
+                        setGeneratedVideoUrl(objectUrl);
+                    } catch (fetchError: any) {
+                         setError((language === 'en' ? 'Failed to download video file: ' : 'वीडियो फ़ाइल डाउनलोड करने में विफल: ') + fetchError.message);
+                    } finally {
+                        setIsFetchingVideo(false);
+                    }
                 } else {
                     setError(language === 'en' ? 'Video generation finished but no video was found.' : 'वीडियो जनरेशन समाप्त हो गया लेकिन कोई वीडियो नहीं मिला।');
                 }
@@ -616,18 +638,21 @@ const VideoGeneratorTool: React.FC<ToolProps> = ({ tool }) => {
                             <p className="font-semibold text-slate-700">{loadingMessage}</p>
                         </div>
                     )}
+                    {isFetchingVideo && (
+                         <div className="w-full aspect-video bg-slate-100 rounded-lg flex flex-col items-center justify-center text-center p-4">
+                            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                            <p className="font-semibold text-slate-700">{language === 'en' ? 'Finalizing and loading video...' : 'वीडियो को अंतिम रूप दिया जा रहा है और लोड किया जा रहा है...'}</p>
+                        </div>
+                    )}
                     {generatedVideoUrl && (
                         <div>
-                             <p className="text-center text-sm text-slate-600 mb-4 bg-yellow-100 border border-yellow-300 p-3 rounded-lg">
-                                {language === 'en' ? 'Video generated! In a real application, the video would be displayed or downloaded from a secure server.' : 'वीडियो बन गया! एक वास्तविक एप्लिकेशन में, वीडियो एक सुरक्षित सर्वर से प्रदर्शित या डाउनलोड किया जाएगा।'}
-                            </p>
+                           <video controls src={generatedVideoUrl} className="w-full rounded-lg border border-slate-200" />
                             <a 
                                 href={generatedVideoUrl} 
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="w-full block text-center bg-slate-700 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-slate-800 transition-colors"
+                                download={`pixelcraft-video-${Date.now()}.mp4`}
+                                className="w-full block text-center mt-4 bg-slate-700 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-slate-800 transition-colors"
                             >
-                                {language === 'en' ? 'Open Video Link' : 'वीडियो लिंक खोलें'}
+                                {language === 'en' ? 'Download Video' : 'वीडियो डाउनलोड करें'}
                             </a>
                         </div>
                     )}
@@ -1050,9 +1075,9 @@ const App: React.FC = () => {
                 <Sidebar activeToolId={activeToolId} setActiveToolId={setActiveToolId} />
                 <div className="flex flex-col flex-1">
                     <Header />
-                    <main className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6 md:p-8">
+                   <main className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6 md:p-8">
                         {renderActiveTool()}
-                    </main>
+                     </main>
                 </div>
             </div>
         </LanguageContext.Provider>
