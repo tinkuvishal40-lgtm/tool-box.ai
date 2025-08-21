@@ -148,7 +148,7 @@ const CopyIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 
 // --- GEMINI SERVICE ---
-const API_KEY = "AIzaSyAmn1Y4qBKdie20lZqpn8OLvYF_JQ5E_nA";
+const API_KEY = "AIzaSyAkg7ghuASps8iAtxOCUHwUlCvsFOD9jdU";
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 const fileToGenerativePart = async (file: File) => {
